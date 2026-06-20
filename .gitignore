@@ -1,0 +1,16 @@
+
+
+
+
+# Исполняемые файлы
+razor_blade
+
+# Файлы данных (не загружаем приватные списки и отчеты)
+domains.txt
+resolvers.txt
+scan_results.xml
+
+# Логи редакторов кода
+.vscode/
+.idea/
+*.swp
