@@ -1,0 +1,15 @@
+www
+mail
+remote
+blog
+webmail
+server
+ns1
+ns2
+smtp
+vpn
+secure
+api
+dev
+staging
+status

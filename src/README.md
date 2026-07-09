@@ -1,103 +1,73 @@
+# RazorBlade 🔪
 
+**RazorBlade** is a high-speed, asynchronous, and modular sub-domain brute-forcer and DNS scanner written in C and Python. It utilizes low-level networking techniques to achieve maximum performance while bypassing simple Intrusion Detection Systems (IDS).
 
+## 🚀 Key Features
 
-# Async DNS Fragment Scanner
+* **IP Fragmentation:** Splits raw UDP DNS requests into multiple IP fragments to bypass basic firewalls and network filters.
+* **Asynchronous Architecture:** Combines `libpcap` for sniffing incoming traffic and `epoll` for efficient, non-blocking event-driven packet processing.
+* **Full CNAME Chain Resolution:** Deeply parses complex DNS responses, automatically traversing multi-level CNAME aliases (e.g., AWS Global Accelerator, Cloudflare) down to the final IP addresses.
+* **Subdomain Bruteforcing:** Ships with a fast python generator to prepare mass scanning targets from dictionary files.
+* **Advanced Analytics:** Includes a post-scan Python tool that parses raw XML data into fully styled Excel spreadsheets (`.xlsx`) and generates visual status distribution charts (`.png`).
 
-Высокоскоростной асинхронный сетевой сканер на C 
-для массового анализа DNS-резолверов с использованием механизмов фрагментации IP-пакетов. 
-Инструмент предназначен для тестирования инфраструктуры на устойчивость 
-к обходу систем обнаружения вторжений (IDS/IPS) и анализа производительности DNS.
+---
 
-## Особенности архитектуры
+## 🛠️ System Architecture
 
-- **Ручная фрагментация пакетов:** Использование `SOCK_RAW` и флага `IP_HDRINCL` для разделения UDP/DNS датаграмм на отдельные фрагменты (bypass-тестирование).
-- **Высокая производительность:** Архитектура на базе неблокирующего цикла событий `epoll` и `libpcap` для асинхронного захвата ответов.
-- **Балансировка нагрузки (Round-Robin):** Поддержка пула DNS-серверов для распределения запросов и предотвращения срабатывания Rate Limiting.
-- **Контроль состояний (State Table):** Точная фиксация сетевых таймаутов (`TIMEOUT`) для потерянных пакетов.
-- **Безопасность памяти:** Защищенный парсер DNS-ответов с жесткой валидацией границ буфера для предотвращения уязвимостей типа Buffer Overflow.
-- **Оптимизированный I/O:** Потоковая буферизация (64 КБ) для мгновенного сохранения результатов в XML без блокировки основного цикла.
+The project is split into clean, production-ready C modules:
+1. `main.c` - Core event loop utilizing `epoll` and target queue control.
+2. `network.c` - Raw socket operations, IP fragmentation checksums, and `libpcap` sniffing handlers.
+3. `parser.c` - Memory-safe, pointer-defended DNS compression and name parser.
+4. `io_utils.c` - High-performance buffered I/O streams for file loading and live XML generation.
 
-## 🛠️ Установка зависимостей и сборка
+---
 
-### Arch Linux
+## 💻 Installation & Compilation
+
+Since the project interacts directly with raw network interfaces and sniffs packets, it requires **Linux** (tested on Arch Linux) and the `pcap` development library.
+
+### 1. Install Dependencies
+On Arch Linux:
 ```bash
-sudo pacman -S --needed base-devel libpcap
+sudo pacman -S gcc make libpcap python-pandas python-openpyxl python-matplotlib
 ```
 
-### Ubuntu / Debian
+### 2. Compile the Project
+Build the binary silently with high-level optimization (`-O3`):
 ```bash
-sudo apt update && sudo apt install build-essential libpcap-dev
+make clean && make
 ```
+This will produce a clean, warning-free executable called `razor_blade`.
 
-### Компиляция
+---
+
+## 🎯 Usage Guide
+
+The tool operates in a three-step pipeline: **Generate ➡️ Scan ➡️ Analyze**.
+
+### Step 1: Generate Subdomain Targets
+Prepare your target wordlist in `wordlist.txt`, then run the generator to create `domains.txt`:
 ```bash
-gcc -O3 scanner.c -o dns_scanner -lpcap
+python brute_gen.py yahoo.com
 ```
 
-## ⚙️ Настройка и Запуск
-
-1. Подготовьте списки целей и серверов:
+### Step 2: Run the High-Speed Scanner
+Make sure you have your targets in `domains.txt` and a list of DNS servers in `resolvers.txt` (e.g., `8.8.8.8`). Run the binary using your active network interface and local IP address (requires `sudo` for raw sockets):
 ```bash
-cp domains.txt.example domains.txt
-cp resolvers.txt.example resolvers.txt
+# Identify your interface via: ip -br a
+sudo ./razor_blade enp6s0 192.168.1.69
 ```
-2. Предоставьте бинарному файлу права на работу с сырыми сокетами, чтобы запускать его **без прав root (`sudo`)**:
+
+### Step 3: Parse Results and Generate Reports
+Activate your Python virtual environment (if any) and compile raw data into human-readable files:
 ```bash
-sudo setcap cap_net_raw,cap_net_admin=eip ./dns_scanner
+python report_parser.py
 ```
-3. Запустите скрипт автоматического определения сетевой конфигурации:
-```bash
-chmod +x run.sh
-./run.sh
-```
+Outputs:
+* `scan_report.xlsx` — A clean, fully auto-fitted Excel table containing timestamps, targets, specific resolvers, statuses, and resolved values.
+* `scan_statistics.png` — A high-resolution chart displaying the distribution of `NOERROR`, `TIMEOUT`, and `NXDOMAIN` flags.
 
-## 📊 Формат отчета (`scan_results.xml`)
-Результаты сохраняются в структурированном виде:
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<scan_records>
-  <response>
-    <timestamp>1781943800</timestamp>
-    <domain>google.com</domain>
-    <dns_server>8.8.8.8</dns_server>
-    <status>NOERROR</status>
-    <record>
-      <type>A</type>
-      <value>142.250.74.46</value>
-      <ttl>300</ttl>
-    </record>
-  </response>
-</scan_records>
-```
+---
 
-## ⚠️ Дисклеймер (Disclaimer)
-Данный инструмент разработан исключительно в образовательных целях 
-и для проведения легитимных тестов на проникновение по согласованию с владельцами инфраструктуры. 
-
-Автор не несет ответственности за любой ущерб, причиненный использованием данного ПО.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+## 📜 License
+This project is open-source and available under the MIT License.
