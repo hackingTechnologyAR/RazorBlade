@@ -67,6 +67,10 @@ Outputs:
 * `scan_report.xlsx` — A clean, fully auto-fitted Excel table containing timestamps, targets, specific resolvers, statuses, and resolved values.
 * `scan_statistics.png` — A high-resolution chart displaying the distribution of `NOERROR`, `TIMEOUT`, and `NXDOMAIN` flags.
 
+
+https://github.com/user-attachments/assets/28d09393-42bd-43ba-bdce-5daa6447c520
+
+
 ---
 
 ## 📜 License
