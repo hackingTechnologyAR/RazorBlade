@@ -1,3 +1,9 @@
+
+
+
+
+
+
 #include "network.h"
 #include "parser.h"
 #include "io_utils.h"
@@ -5,6 +11,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <stddef.h>
+#include <stdint.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <netinet/ip.h>
@@ -52,39 +60,10 @@ int compress_domain(unsigned char *dns, const unsigned char *host) {
         } else { *dns_ptr = *host_ptr; label_len++; }
         dns_ptr++; host_ptr++;
     }
-    *dns_ptr++ = 0x00; *dns_ptr++ = 0x00; *dns_ptr++ = 0x01; *dns_ptr++ = 0x00; *dns_ptr++ = 0x01;
+    *dns_ptr++ = 0x00; 
+    *dns_ptr++ = 0x00; *dns_ptr++ = 0x10; // Type TXT (16)
+    *dns_ptr++ = 0x00; *dns_ptr++ = 0x01; // Class IN (1)
     return (dns_ptr - dns);
-}
-
-void send_fragmented_dns(int raw_sockfd, const char *src_ip, const char *dst_ip, unsigned char *dns_payload, int dns_len) {
-    char packet[BUFFER_SIZE];
-    struct iphdr *iph = (struct iphdr *)packet;
-    struct udphdr *udph = (struct udphdr *)(packet + sizeof(struct iphdr));
-    uint16_t ip_id = rand() % 65535;
-    struct sockaddr_in sin;
-    sin.sin_family = AF_INET; sin.sin_port = htons(DNS_PORT); sin.sin_addr.s_addr = inet_addr(dst_ip);
-
-    int first_data_len = 8; 
-    int fragment1_payload_len = sizeof(struct udphdr) + first_data_len;
-    memset(packet, 0, sizeof(packet));
-    udph->source = htons(31337); udph->dest = htons(DNS_PORT); udph->len = htons(sizeof(struct udphdr) + dns_len); udph->check = 0;
-    memcpy(packet + sizeof(struct iphdr) + sizeof(struct udphdr), dns_payload, first_data_len);
-    iph->ihl = 5; iph->version = 4; iph->tot_len = htons(sizeof(struct iphdr) + fragment1_payload_len);
-    iph->id = htons(ip_id); iph->frag_off = htons(IP_MF | 0); iph->ttl = 64;
-    iph->protocol = IPPROTO_UDP; iph->saddr = inet_addr(src_ip); iph->daddr = sin.sin_addr.s_addr;
-    iph->check = checksum((unsigned short *)packet, sizeof(struct iphdr));
-    sendto(raw_sockfd, packet, sizeof(struct iphdr) + fragment1_payload_len, 0, (struct sockaddr *)&sin, sizeof(sin));
-
-    int second_data_len = dns_len - first_data_len;
-    if (second_data_len > 0) {
-        memset(packet, 0, sizeof(packet));
-        memcpy(packet + sizeof(struct iphdr), dns_payload + first_data_len, second_data_len);
-        iph->ihl = 5; iph->version = 4; iph->tot_len = htons(sizeof(struct iphdr) + second_data_len);
-        iph->id = htons(ip_id); iph->frag_off = htons(2); iph->ttl = 64;
-        iph->protocol = IPPROTO_UDP; iph->saddr = inet_addr(src_ip); iph->daddr = sin.sin_addr.s_addr;
-        iph->check = checksum((unsigned short *)packet, sizeof(struct iphdr));
-        sendto(raw_sockfd, packet, sizeof(struct iphdr) + second_data_len, 0, (struct sockaddr *)&sin, sizeof(sin));
-    }
 }
 
 uint16_t get_free_dns_id(void) {
@@ -115,10 +94,47 @@ void send_dynamic_fragmented_dns(int raw_sockfd, const char *src_ip, const char 
 
     unsigned char *edns = qname + qname_len;
     memset(edns, 0, 11);
-    edns[3] = 0x29; edns[4] = 0x10; // OPT RR RFC6891
+    edns[3] = 0x29; edns[4] = 0x10; // OPT RR EDNS0
     int dns_len = sizeof(struct dns_header) + qname_len + 11;
 
-    send_fragmented_dns(raw_sockfd, src_ip, dst_ip, dns_payload, dns_len);
+    char packet[BUFFER_SIZE];
+    struct iphdr *iph = (struct iphdr *)packet;
+    struct udphdr *udph = (struct udphdr *)(packet + sizeof(struct iphdr));
+    struct sockaddr_in sin;
+    sin.sin_family = AF_INET; sin.sin_port = htons(DNS_PORT); sin.sin_addr.s_addr = inet_addr(dst_ip);
+    uint16_t ip_id = rand() % 65535;
+
+    int dns_header_and_query_len = sizeof(struct dns_header) + qname_len;
+    int total_frag1_data = (sizeof(struct udphdr) + dns_header_and_query_len + 7) & ~7;
+    int first_data_len = total_frag1_data - sizeof(struct udphdr);
+
+    if (first_data_len > dns_len) {
+        first_data_len = dns_len;
+        total_frag1_data = sizeof(struct udphdr) + dns_len;
+    }
+
+    memset(packet, 0, sizeof(packet));
+    udph->source = htons(31337); udph->dest = htons(DNS_PORT); udph->len = htons(sizeof(struct udphdr) + dns_len); udph->check = 0;
+    memcpy(packet + sizeof(struct iphdr) + sizeof(struct udphdr), dns_payload, first_data_len);
+    
+    iph->ihl = 5; iph->version = 4; iph->tot_len = htons(sizeof(struct iphdr) + total_frag1_data);
+    iph->id = htons(ip_id); iph->frag_off = htons(IP_MF | 0); iph->ttl = 64;
+    iph->protocol = IPPROTO_UDP; iph->saddr = inet_addr(src_ip); iph->daddr = sin.sin_addr.s_addr;
+    iph->check = checksum((unsigned short *)packet, sizeof(struct iphdr));
+    sendto(raw_sockfd, packet, sizeof(struct iphdr) + total_frag1_data, 0, (struct sockaddr *)&sin, sizeof(sin));
+
+    int second_data_len = dns_len - first_data_len;
+    if (second_data_len > 0) {
+        memset(packet, 0, sizeof(packet));
+        memcpy(packet + sizeof(struct iphdr), dns_payload + first_data_len, second_data_len);
+        
+        iph->ihl = 5; iph->version = 4; iph->tot_len = htons(sizeof(struct iphdr) + second_data_len);
+        iph->id = htons(ip_id); 
+        iph->frag_off = htons(total_frag1_data / 8); 
+        iph->ttl = 64; iph->protocol = IPPROTO_UDP; iph->saddr = inet_addr(src_ip); iph->daddr = sin.sin_addr.s_addr;
+        iph->check = checksum((unsigned short *)packet, sizeof(struct iphdr));
+        sendto(raw_sockfd, packet, sizeof(struct iphdr) + second_data_len, 0, (struct sockaddr *)&sin, sizeof(sin));
+    }
 }
 
 void process_dns_packet(const u_char *packet, int packet_len) {
@@ -185,12 +201,22 @@ void process_dns_packet(const u_char *packet, int packet_len) {
         if (reader + 10 > packet_end) return;
            
         uint16_t type = ntohs(*(uint16_t *)reader); reader += 2;
-        reader += 2; // Пропускаем поле Class напрямую, убирая предупреждение
+        reader += 2; 
         uint32_t ttl = ntohl(*(uint32_t *)reader); reader += 4;
         uint16_t rdlen = ntohs(*(uint16_t *)reader); reader += 2;
          
         if (reader + rdlen > packet_end) return;
-        if (type == 1 && rdlen == 4) { 
+        
+        if (type == 16) { 
+            unsigned char txt_len = *reader;
+            if (txt_len < rdlen) {
+                char txt_str[256] = {0};
+                size_t cpy_len = txt_len;
+                memcpy(txt_str, reader + 1, cpy_len);
+                printf("[+] Домен: %s -> TXT: %s (%s)\n", answer_name, txt_str, dns_status);
+                write_response_to_xml(answer_name, dns_status, "TXT", txt_str, ttl, dns_server_ip);
+            }
+        } else if (type == 1 && rdlen == 4) { 
             struct in_addr ip_addr; memcpy(&ip_addr.s_addr, reader, 4);
             char ip_str[INET_ADDRSTRLEN];
             inet_ntop(AF_INET, &ip_addr, ip_str, INET_ADDRSTRLEN);
@@ -206,16 +232,17 @@ void process_dns_packet(const u_char *packet, int packet_len) {
             write_response_to_xml(answer_name, dns_status, "OTHER", "RAW_DATA", ttl, dns_server_ip);
         }
         reader += rdlen;
-    }
-    state_table[dns_id].is_active = 0; active_requests_count--;
-}
+        
+        }state_table[dns_id].is_active = 0; active_requests_count--;}void handle_pcap_read(pcap_t *handle) {struct pcap_pkthdr *header;const u_char *packet;int res;int max_packets_per_run = 50;while (max_packets_per_run-- > 0 && (res = pcap_next_ex(handle, &header, &packet)) > 0) {process_dns_packet(packet, header->len);}}
 
-void handle_pcap_read(pcap_t *handle) {
-    struct pcap_pkthdr *header;
-    const u_char *packet;
-    int res;
-    int max_packets_per_run = 50;
-    while (max_packets_per_run-- > 0 && (res = pcap_next_ex(handle, &header, &packet)) > 0) {
-        process_dns_packet(packet, header->len); 
-    }
-}
+
+
+
+
+
+
+
+
+
+
+
