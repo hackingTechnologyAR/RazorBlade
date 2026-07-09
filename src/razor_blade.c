@@ -435,13 +435,13 @@ if (qdcount > 0) {
        reader += bytes_consumed;
        if (reader + 10 > packet_end) return;
        
-     uint16_t type = ntohs(*(uint16_t )reader); 
+     uint16_t type = ntohs(*(uint16_t *)reader);
      reader += 2;
-     uint16_t class = ntohs((uint16_t )reader); 
+     uint16_t class = ntohs(*(uint16_t *)reader);
      reader += 2;
-     uint32_t ttl = ntohl((uint32_t )reader); 
+     uint32_t ttl = ntohl(*(uint32_t *)reader);
      reader += 4;
-     uint16_t rdlen = ntohs((uint16_t *)reader); 
+     uint16_t rdlen = ntohs(*(uint16_t *)reader); 
      reader += 2;
      
      if (reader + rdlen > packet_end) return;
