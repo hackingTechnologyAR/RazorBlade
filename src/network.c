@@ -191,7 +191,7 @@ void process_dns_packet(const u_char *packet, int packet_len) {
         return;
     }
 
-    for (int i = 0; i < ancount; i++) {
+        for (int i = 0; i < ancount; i++) {
         char answer_name[256] = {0};
         int dst_idx = 0;
         int bytes_consumed = safe_parse_dns_name(dns_start, packet_end, reader, answer_name, &dst_idx, sizeof(answer_name));
@@ -215,6 +215,9 @@ void process_dns_packet(const u_char *packet, int packet_len) {
                 memcpy(txt_str, reader + 1, cpy_len);
                 printf("[+] Домен: %s -> TXT: %s (%s)\n", answer_name, txt_str, dns_status);
                 write_response_to_xml(answer_name, dns_status, "TXT", txt_str, ttl, dns_server_ip);
+                
+                // Добавляем запись TXT в наш красивый HTML-отчет на Си
+                write_response_to_html(answer_name, "TXT", txt_str, ttl);
             }
         } else if (type == 1 && rdlen == 4) { 
             struct in_addr ip_addr; memcpy(&ip_addr.s_addr, reader, 4);
@@ -222,22 +225,28 @@ void process_dns_packet(const u_char *packet, int packet_len) {
             inet_ntop(AF_INET, &ip_addr, ip_str, INET_ADDRSTRLEN);
             printf("[+] Домен: %s -> IP: %s (%s)\n", answer_name, ip_str, dns_status);
             write_response_to_xml(answer_name, dns_status, "A", ip_str, ttl, dns_server_ip);
+            
+            // Добавляем запись IP (A) в HTML-отчет
+            write_response_to_html(answer_name, "A (IP)", ip_str, ttl);
         } else if (type == 5) { 
             char cname[256] = {0}; int cname_idx = 0;
             if (safe_parse_dns_name(dns_start, packet_end, reader, cname, &cname_idx, sizeof(cname)) >= 0) {
                 printf("[+] Домен: %s -> CNAME: %s (%s)\n", answer_name, cname, dns_status);
                 write_response_to_xml(answer_name, dns_status, "CNAME", cname, ttl, dns_server_ip);
+                
+                // Добавляем запись CNAME в HTML-отчет
+                write_response_to_html(answer_name, "CNAME", cname, ttl);
             }
         } else {
             write_response_to_xml(answer_name, dns_status, "OTHER", "RAW_DATA", ttl, dns_server_ip);
         }
         reader += rdlen;
-        
-        }
+    }
      
-     state_table[dns_id].is_active = 0; 
-     active_requests_count--;
-     }
+    state_table[dns_id].is_active = 0; 
+    active_requests_count--;
+}
+
      
 void handle_pcap_read(pcap_t *handle) {
 	struct pcap_pkthdr *header;

@@ -18,4 +18,8 @@ int init_global_xml(const char *filename);
 void write_response_to_xml(const char *domain, const char *status, const char *rec_type, const char *value, uint32_t ttl, const char *dns_server_ip);
 void close_global_xml(void);
 
+int init_global_html(const char *filename);
+void write_response_to_html(const char *domain, const char *rec_type, const char *value, uint32_t ttl);
+void close_global_html(void);
+
 #endif

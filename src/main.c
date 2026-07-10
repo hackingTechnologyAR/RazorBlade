@@ -43,6 +43,11 @@ int main(int argc, char *argv[]) {
         free(target_list); free(dns_pool); 
         return 1;
     }
+    if (init_global_html("scan_report.html") < 0) {
+    close_global_xml(); free(target_list); free(dns_pool);
+    return 1;
+    }
+
 
     int raw_sockfd = socket(AF_INET, SOCK_RAW, IPPROTO_RAW);
     int one = 1;
@@ -113,6 +118,7 @@ int main(int argc, char *argv[]) {
     }
 
     close_global_xml();
+    close_global_html();
     close(epoll_fd); 
     pcap_close(pcap_handle); 
     close(raw_sockfd);

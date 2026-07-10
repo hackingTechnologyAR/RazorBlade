@@ -6,3 +6,4 @@ razor_blade
 *.png
 *.save
 venv/
+scan_report.html
