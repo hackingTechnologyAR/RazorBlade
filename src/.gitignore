@@ -1,0 +1,8 @@
+main
+razor_blade
+*.o
+*.xml
+*.xlsx
+*.png
+*.save
+venv/

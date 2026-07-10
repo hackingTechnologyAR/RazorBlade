@@ -1,3 +1,7 @@
+
+
+
+
 #include "io_utils.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -22,7 +26,7 @@ int load_domains_from_file(const char *filename) {
 
     int capacity = 1000;
     target_list = malloc(capacity * sizeof(target_domain_t));
-    char line[256];
+    char line[240];  // // Уменьшили размер буфера, чтобы убрать предупреждение о truncate
 
     while (fgets(line, sizeof(line), fp)) {
         line[strcspn(line, "\r\n")] = 0;
@@ -34,7 +38,14 @@ int load_domains_from_file(const char *filename) {
             if (!tmp) { fclose(fp); return -1; }
             target_list = tmp;
         }
-        snprintf(target_list[total_targets].name, sizeof(target_list[total_targets].name), "%s", line);
+
+        // Автоматическая подстановка префикса _dmarc. если пользователь его забыл
+        if (strncmp(line, "_dmarc.", 7) != 0) {
+            snprintf(target_list[total_targets].name, sizeof(target_list[total_targets].name), "_dmarc.%s", line);
+        } else {
+            snprintf(target_list[total_targets].name, sizeof(target_list[total_targets].name), "%s", line);
+        }
+
         total_targets++;
     }
     fclose(fp);
@@ -47,7 +58,7 @@ int load_dns_pool_from_file(const char *filename) {
 
     int capacity = 100;
     dns_pool = malloc(capacity * sizeof(dns_server_t));
-    char line[IP_STR_LEN]; // Уменьшили размер буфера чтения до 16, чтобы убрать варнинг
+    char line[IP_STR_LEN]; // Буфер ограничен IP_STR_LEN для исключения варнингов
 
     while (fgets(line, sizeof(line), fp)) {
         line[strcspn(line, "\r\n")] = 0;

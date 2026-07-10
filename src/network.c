@@ -233,7 +233,22 @@ void process_dns_packet(const u_char *packet, int packet_len) {
         }
         reader += rdlen;
         
-        }state_table[dns_id].is_active = 0; active_requests_count--;}void handle_pcap_read(pcap_t *handle) {struct pcap_pkthdr *header;const u_char *packet;int res;int max_packets_per_run = 50;while (max_packets_per_run-- > 0 && (res = pcap_next_ex(handle, &header, &packet)) > 0) {process_dns_packet(packet, header->len);}}
+        }
+     
+     state_table[dns_id].is_active = 0; 
+     active_requests_count--;
+     }
+     
+void handle_pcap_read(pcap_t *handle) {
+	struct pcap_pkthdr *header;
+	
+	const u_char *packet;
+	int res;int max_packets_per_run = 50;
+	
+	while (max_packets_per_run-- > 0 && (res = pcap_next_ex(handle, &header, &packet)) > 0) {
+		process_dns_packet(packet, header->len);
+		} 
+		}
 
 
 
