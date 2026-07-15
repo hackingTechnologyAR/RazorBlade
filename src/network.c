@@ -248,18 +248,41 @@ void process_dns_packet(const u_char *packet, int packet_len) {
 }
 
      
+
 void handle_pcap_read(pcap_t *handle) {
-	struct pcap_pkthdr *header;
-	
-	const u_char *packet;
-	int res;int max_packets_per_run = 50;
-	
-	while (max_packets_per_run-- > 0 && (res = pcap_next_ex(handle, &header, &packet)) > 0) {
-		process_dns_packet(packet, header->len);
-		} 
-		}
-
-
+    struct pcap_pkthdr *header;
+    const u_char *packet;
+    int res;
+    
+    // Увеличиваем лимит до 500, чтобы на высокой скорости не копить очередь в ядре
+    int max_packets_per_run = 500; 
+    
+    while (max_packets_per_run-- > 0) {
+        res = pcap_next_ex(handle, &header, &packet);
+        
+        if (res > 0) {
+            // Успешно поймали пакет — отправляем в наш безопасный парсер
+            process_dns_packet(packet, header->len);
+        } 
+        else if (res == 0) {
+            // Пакеты в буфере ядра Linux закончились, выходим в epoll
+            break; 
+        } 
+        else {
+            // res < 0: Критическая ошибка интерфейса (например, res == -1)
+            // Чтобы не спамить в терминал на каждый чих, пишем только при серьезном сбое
+            if (res == -1) {
+                static time_t last_err_time = 0;
+                time_t now = time(NULL);
+                if (now - last_err_time > 5) { // Ограничиваем спам ошибок раз в 5 секунд
+                    fprintf(stderr, "[-] Предупреждение pcap_next_ex: %s\n", pcap_geterr(handle));
+                    last_err_time = now;
+                }
+            }
+            break;
+        }
+    }
+}
 
 
 

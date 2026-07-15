@@ -1,3 +1,7 @@
+
+
+
+
 #ifndef DNS_STRUCTURES_H
 #define DNS_STRUCTURES_H
 
@@ -5,8 +9,10 @@
 #include <stdint.h>
 
 #define MAX_DNS_IDS 65536
-#define IP_STR_LEN 16
+// ИСПРАВЛЕНО: Расширили до 46 байт для поддержки любых IP и устранения варнингов компилятора
+#define IP_STR_LEN 46 
 
+// Бинарный заголовок DNS согласно RFC 1035
 struct dns_header {
     unsigned short id;
     unsigned short flags;
@@ -17,7 +23,8 @@ struct dns_header {
 };
 
 typedef struct {
-    char name[256];
+    // ИСПРАВЛЕНО: Увеличили до 512 для безопасного добавления префикса "_dmarc."
+    char name[512]; 
 } target_domain_t;
 
 typedef struct {
@@ -25,7 +32,8 @@ typedef struct {
 } dns_server_t;
 
 typedef struct {
-    char domain[256];
+    // ИСПРАВЛЕНО: Синхронизировали размер с target_domain_t
+    char domain[512]; 
     char dns_server[IP_STR_LEN];
     time_t sent_time;
     int is_active;
